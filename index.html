@@ -3,73 +3,219 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nimon</title>
-  <meta name="description" content="Persönliche Homepage von Niculina und Ramon">
+  <title>nimon.ch</title>
+  <meta name="description" content="nimon.ch – under construction">
   <style>
     :root {
-      --bg: #fafaf8;
-      --text: #222;
-      --muted: #666;
-      --accent: #c0392b;
-      --line: #e3e3e0;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1a1a1a;
-        --text: #eee;
-        --muted: #aaa;
-        --accent: #e8735f;
-        --line: #333;
-      }
+      --bg: #0c0f0c;
+      --fg: #b8f5b0;
+      --dim: #5f8a5a;
+      --accent: #f5d76e;
+      --err: #ff7b72;
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
       background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.6;
+      color: var(--fg);
+      font: 15px/1.6 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+      cursor: text;
     }
-    main {
-      max-width: 640px;
+    body::after { /* dezente Scanlines */
+      content: "";
+      position: fixed; inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(to bottom, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+    }
+    #term {
+      max-width: 820px;
       margin: 0 auto;
-      padding: 4rem 1.25rem 2rem;
+      padding: 2.5rem 1rem 4rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      text-shadow: 0 0 6px rgba(184,245,176,.35);
     }
-    h1 {
-      font-size: 2.2rem;
-      margin: 0 0 .25rem;
-      letter-spacing: -.02em;
+    .prompt { color: var(--accent); }
+    .dim { color: var(--dim); }
+    .err { color: var(--err); }
+    .cursor {
+      display: inline-block;
+      width: .6em; height: 1.1em;
+      vertical-align: text-bottom;
+      background: var(--fg);
+      animation: blink 1s steps(1) infinite;
     }
-    .tagline {
-      color: var(--muted);
-      margin: 0 0 2.5rem;
-      font-size: 1.1rem;
+    @keyframes blink { 50% { opacity: 0; } }
+    #input {
+      position: absolute; left: -9999px; opacity: 0;
     }
-    h2 {
-      font-size: 1.1rem;
-      margin: 2rem 0 .5rem;
-      padding-bottom: .3rem;
-      border-bottom: 1px solid var(--line);
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    ul { padding-left: 1.2rem; }
-    footer {
-      margin-top: 4rem;
-      font-size: .85rem;
-      color: var(--muted);
+    @media (prefers-reduced-motion: reduce) {
+      .cursor { animation: none; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <h1>Niculina & Ramon</h1>
-    <footer>
-      © <span id="jahr">2026</span> Ramon Rinaldi
-    </footer>
-  </main>
+  <div id="term" aria-live="polite"></div>
+  <input id="input" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Befehl eingeben">
+
   <script>
-    document.getElementById("jahr").textContent = new Date().getFullYear();
+    const term = document.getElementById("term");
+    const input = document.getElementById("input");
+    const PROMPT = "gast@nimon.ch:~$ ";
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const sleep = ms => new Promise(r => setTimeout(r, reduced ? 0 : ms));
+
+    function line(text = "", cls = "") {
+      const el = document.createElement("div");
+      if (cls) el.className = cls;
+      el.textContent = text;
+      term.appendChild(el);
+      window.scrollTo(0, document.body.scrollHeight);
+      return el;
+    }
+
+    function promptLine() {
+      const el = document.createElement("div");
+      const p = document.createElement("span");
+      p.className = "prompt";
+      p.textContent = PROMPT;
+      const cmd = document.createElement("span");
+      el.append(p, cmd);
+      term.appendChild(el);
+      return cmd;
+    }
+
+    async function typeCmd(text) {
+      const cmd = promptLine();
+      const cur = document.createElement("span");
+      cur.className = "cursor";
+      cmd.after(cur);
+      await sleep(500);
+      for (const ch of text) {
+        cmd.textContent += ch;
+        await sleep(55 + Math.random() * 70);
+      }
+      await sleep(300);
+      cur.remove();
+    }
+
+    const start = Date.now();
+    const commands = {
+      help: () => [
+        "Verfügbare Befehle:",
+        "  help      diese Übersicht",
+        "  status    Zustand der Seite",
+        "  date      aktuelles Datum und Uhrzeit",
+        "  uptime    wie lange du schon hier bist",
+        "  ls        Dateien anzeigen",
+        "  cat       Datei ausgeben (z. B. cat readme.txt)",
+        "  ping      Verbindung testen",
+        "  clear     Bildschirm leeren",
+		"  autor     Autor ausgeben"
+      ],
+      status: () => [
+        "[ OK ] DNS",
+        "[ OK ] HTTPS",
+        "[ OK ] index.html",
+        "[ .. ] Inhalt ......... under construction"
+      ],
+      date: () => [new Date().toLocaleString("de-CH", { dateStyle: "full", timeStyle: "medium" })],
+      uptime: () => {
+        const s = Math.floor((Date.now() - start) / 1000);
+        return [`Du bist seit ${Math.floor(s / 60)} min ${s % 60} s hier.`];
+      },
+      ls: () => ["readme.txt  todo.txt  .geheim"],
+      ping: () => [
+        "PING nimon.ch: 56 data bytes",
+        ...[1, 2, 3].map(i => `64 bytes from nimon.ch: icmp_seq=${i} ttl=64 time=${(Math.random() * 20 + 4).toFixed(1)} ms`),
+        "--- 3 packets transmitted, 3 received, 0% packet loss ---"
+      ],
+      whoami: () => ["gast"],
+	  autor: () => ["Ramon Rinaldi - mit freundlicher Unterstützung von Claudia"],
+      sudo: () => [["Netter Versuch.", "err"]],
+      exit: () => ["Hier gibt es keinen Ausgang. Nur Refresh."]
+    };
+
+    const files = {
+      "readme.txt": ["Diese Seite ist im Aufbau.", "Bis dahin: Tippe 'help'."],
+      "todo.txt": ["[x] Domain einrichten", "[x] HTTPS", "[ ] Inhalt", "[ ] Kaffee"],
+      ".geheim": ["Du hast es gefunden. Es gibt hier nichts zu sehen. :)"]
+    };
+
+    function run(raw) {
+      const [cmd, ...args] = raw.trim().split(/\s+/);
+      if (!cmd) return;
+      if (cmd === "clear") { term.innerHTML = ""; return; }
+      if (cmd === "cat") {
+        const f = args[0];
+        if (!f) return line("cat: Dateiname fehlt", "err");
+        if (!files[f]) return line(`cat: ${f}: Datei nicht gefunden`, "err");
+        files[f].forEach(t => line(t));
+        return;
+      }
+      if (cmd === "ls" && args.includes("-a")) {
+        return line(".  ..  readme.txt  todo.txt  .geheim");
+      }
+      const fn = commands[cmd.toLowerCase()];
+      if (!fn) return line(`${cmd}: Befehl nicht gefunden. Versuch 'help'.`, "err");
+      fn().forEach(t => Array.isArray(t) ? line(t[0], t[1]) : line(t));
+    }
+
+    // interaktive Eingabezeile
+    let activeCmd = null, activeCur = null;
+    const history = [];
+    let hIndex = 0;
+
+    function newPrompt() {
+      activeCmd = promptLine();
+      activeCur = document.createElement("span");
+      activeCur.className = "cursor";
+      activeCmd.after(activeCur);
+      input.value = "";
+      input.focus({ preventScroll: true });
+      window.scrollTo(0, document.body.scrollHeight);
+    }
+
+    input.addEventListener("input", () => { activeCmd.textContent = input.value; });
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const val = input.value;
+        activeCur.remove();
+        if (val.trim()) { history.push(val); }
+        hIndex = history.length;
+        run(val);
+        newPrompt();
+      } else if (e.key === "ArrowUp" && history.length) {
+        e.preventDefault();
+        hIndex = Math.max(0, hIndex - 1);
+        input.value = history[hIndex];
+        activeCmd.textContent = input.value;
+      } else if (e.key === "ArrowDown" && history.length) {
+        e.preventDefault();
+        hIndex = Math.min(history.length, hIndex + 1);
+        input.value = history[hIndex] ?? "";
+        activeCmd.textContent = input.value;
+      }
+    });
+    document.addEventListener("click", () => input.focus({ preventScroll: true }));
+
+    // Intro
+    (async () => {
+      line("nimon.ch – Terminal v1.0", "dim");
+      line("", "");
+      await typeCmd("ping -c 1 nimon.ch");
+      line("64 bytes from nimon.ch: icmp_seq=1 ttl=64 time=7.3 ms");
+      line("", "");
+      await typeCmd("status");
+      for (const t of commands.status()) { await sleep(250); line(t); }
+      line("", "");
+      await typeCmd("cat readme.txt");
+      files["readme.txt"].forEach(t => line(t));
+      line("", "");
+      newPrompt();
+    })();
   </script>
 </body>
 </html>
