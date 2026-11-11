@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de-CH">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -22,7 +22,7 @@
       font: 15px/1.6 ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
       cursor: text;
     }
-    body::after { /* dezente Scanlines */
+    body::after { /* subtle scanlines */
       content: "";
       position: fixed; inset: 0;
       pointer-events: none;
@@ -57,12 +57,12 @@
 </head>
 <body>
   <div id="term" aria-live="polite"></div>
-  <input id="input" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Befehl eingeben">
+  <input id="input" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Enter command">
 
   <script>
     const term = document.getElementById("term");
     const input = document.getElementById("input");
-    const PROMPT = "gast@nimon.ch:~$ ";
+    const PROMPT = "guest@nimon.ch:~$ ";
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const sleep = ms => new Promise(r => setTimeout(r, reduced ? 0 : ms));
 
@@ -103,16 +103,17 @@
     const start = Date.now();
     const commands = {
       help: () => [
-        "Verfügbare Befehle:",
-        "  help      diese Übersicht",
-        "  status    Zustand der Seite",
-        "  date      aktuelles Datum und Uhrzeit",
-        "  uptime    wie lange du schon hier bist",
-        "  ls        Dateien anzeigen",
-        "  cat       Datei ausgeben (z. B. cat readme.txt)",
-        "  ping      Verbindung testen",
-        "  clear     Bildschirm leeren",
-		"  autor     Autor ausgeben"
+        "Available commands:",
+        "  help      show this overview",
+        "  status    site status",
+        "  date      current date and time",
+        "  uptime    how long you've been here",
+        "  ls        list files (ls -a shows hidden ones)",
+        "  cat       print a file (e.g. cat readme.txt)",
+        "  rm        delete a file (e.g. rm todo.txt)",
+        "  ping      test the connection",
+        "  clear     clear the screen",
+        "  author    show the author"
       ],
       status: () => [
         "[ OK ] DNS",
@@ -120,28 +121,56 @@
         "[ OK ] index.html",
         "[ .. ] Inhalt ......... under construction"
       ],
-      date: () => [new Date().toLocaleString("de-CH", { dateStyle: "full", timeStyle: "medium" })],
+      date: () => [new Date().toLocaleString("en-GB", { dateStyle: "full", timeStyle: "medium" })],
       uptime: () => {
         const s = Math.floor((Date.now() - start) / 1000);
-        return [`Du bist seit ${Math.floor(s / 60)} min ${s % 60} s hier.`];
+        return [`You have been here for ${Math.floor(s / 60)} min ${s % 60} s.`];
       },
-      ls: () => ["readme.txt  todo.txt  .geheim"],
+      ls: () => [listFiles(false)],
       ping: () => [
         "PING nimon.ch: 56 data bytes",
         ...[1, 2, 3].map(i => `64 bytes from nimon.ch: icmp_seq=${i} ttl=64 time=${(Math.random() * 20 + 4).toFixed(1)} ms`),
         "--- 3 packets transmitted, 3 received, 0% packet loss ---"
       ],
-      whoami: () => ["gast"],
-	  autor: () => ["Ramon Rinaldi - mit freundlicher Unterstützung von Claudia"],
-      sudo: () => [["Netter Versuch.", "err"]],
-      exit: () => ["Hier gibt es keinen Ausgang. Nur Refresh."]
+      whoami: () => ["guest"],
+      author: () => ["Ramon Rinaldi - with kind support from Claudia"],
+      sudo: () => [["Nice try.", "err"]],
+      exit: () => ["There is no exit here. Only refresh."]
     };
 
     const files = {
-      "readme.txt": ["Diese Seite ist im Aufbau.", "Bis dahin: Tippe 'help'."],
-      "todo.txt": ["[x] Domain einrichten", "[x] HTTPS", "[ ] Inhalt", "[ ] Kaffee"],
-      ".geheim": ["Du hast es gefunden. Es gibt hier nichts zu sehen. :)"]
+      "readme.txt": ["This site is under construction.", "Until then: type 'help'."],
+      "todo.txt": ["[x] Set up domain", "[x] HTTPS", "[ ] Content", "[ ] Coffee"],
+      ".secret": ["You found it. There is nothing to see here. :)"]
     };
+
+    function listFiles(all) {
+      const names = Object.keys(files).filter(n => all || !n.startsWith("."));
+      if (all) names.unshift(".", "..");
+      return names.length ? names.join("  ") : "";
+    }
+
+    // rm: deletes files from the in-memory file list (back after a page reload)
+    function rm(args) {
+      const force = args.some(a => /^-[a-z]*f/.test(a));
+      const recursive = args.some(a => /^-[a-z]*r/i.test(a));
+      const targets = args.filter(a => !a.startsWith("-"));
+      if (recursive && targets.some(t => t === "/" || t === "/*" || t === "~" || t === "*")) {
+        return line("rm: Nice try. The universe stays where it is.", "err");
+      }
+      if (!targets.length) return line("rm: missing operand", "err");
+      for (const t of targets) {
+        if (t === "*") {
+          Object.keys(files).filter(n => !n.startsWith(".")).forEach(n => delete files[n]);
+        } else if (t === "." || t === "..") {
+          line(`rm: refusing to remove '.' or '..' directory: skipping '${t}'`, "err");
+        } else if (files[t]) {
+          delete files[t];
+        } else if (!force) {
+          line(`rm: cannot remove '${t}': No such file or directory`, "err");
+        }
+      }
+    }
 
     function run(raw) {
       const [cmd, ...args] = raw.trim().split(/\s+/);
@@ -149,20 +178,21 @@
       if (cmd === "clear") { term.innerHTML = ""; return; }
       if (cmd === "cat") {
         const f = args[0];
-        if (!f) return line("cat: Dateiname fehlt", "err");
-        if (!files[f]) return line(`cat: ${f}: Datei nicht gefunden`, "err");
+        if (!f) return line("cat: missing file name", "err");
+        if (!files[f]) return line(`cat: ${f}: No such file or directory`, "err");
         files[f].forEach(t => line(t));
         return;
       }
-      if (cmd === "ls" && args.includes("-a")) {
-        return line(".  ..  readme.txt  todo.txt  .geheim");
+      if (cmd === "rm") return rm(args);
+      if (cmd === "ls" && args.some(a => /^-[a-z]*a/.test(a))) {
+        return line(listFiles(true));
       }
       const fn = commands[cmd.toLowerCase()];
-      if (!fn) return line(`${cmd}: Befehl nicht gefunden. Versuch 'help'.`, "err");
-      fn().forEach(t => Array.isArray(t) ? line(t[0], t[1]) : line(t));
+      if (!fn) return line(`${cmd}: command not found. Try 'help'.`, "err");
+      fn().filter(t => t !== "").forEach(t => Array.isArray(t) ? line(t[0], t[1]) : line(t));
     }
 
-    // interaktive Eingabezeile
+    // interactive input line
     let activeCmd = null, activeCur = null;
     const history = [];
     let hIndex = 0;
